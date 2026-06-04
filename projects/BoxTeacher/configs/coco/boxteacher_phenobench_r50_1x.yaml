@@ -1,0 +1,28 @@
+_BASE_: "../Base-BoxTeacher.yaml"
+MODEL:
+  # Backbone weights: download R-50.pkl into pretrained_models/ (see README
+  # model table). Path is relative to the working dir (repo root).
+  WEIGHTS: "pretrained_models/R-50.pkl"
+  RESNETS:
+    DEPTH: 50
+  FCOS:
+    NUM_CLASSES: 2          # crop, weed (default is 80 for COCO)
+  BOXINST:
+    PAIRWISE:
+      WARMUP_ITERS: 3000    # scaled from 10000 (was tuned for the 90k schedule)
+  BOX_TEACHER:
+    WARMUP_ITERS: 3000      # pseudo-mask loss warmup, scaled likewise
+DATASETS:
+  TRAIN: ("phenobench_train",)
+  TEST: ("phenobench_val",)
+SOLVER:
+  # 1407 train imgs / IMS_PER_BATCH 16 ~= 88 iters/epoch. 20000 iters ~= 227
+  # epochs -- long, but BoxTeacher needs enough steps for the EMA teacher to
+  # produce good pseudo-masks before the warmup saturates. Tune to taste.
+  IMS_PER_BATCH: 16
+  BASE_LR: 0.01
+  MAX_ITER: 20000
+  STEPS: (14000, 18000)
+TEST:
+  EVAL_PERIOD: 2000
+OUTPUT_DIR: "output/boxteacher_phenobench_r50_1x"

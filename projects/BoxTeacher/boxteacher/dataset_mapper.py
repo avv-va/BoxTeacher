@@ -1,7 +1,6 @@
 import copy
 import logging
 import os.path as osp
-from turtle import color
 
 import numpy as np
 import torch
