@@ -55,6 +55,13 @@
            --confidence-threshold 0.7
    ```
 
+## View training logs
+
+  ```
+  tensorboard --logdir output/boxteacher_phenobench_r50_1x`
+  ```
+
+
 <div align="center">
 <h2>BoxTeacher</h2>
 <h4>Exploring High-Quality Pseudo Masks for Weakly Supervised Instance Segmentation</h4>
