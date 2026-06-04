@@ -12,8 +12,6 @@ masks. But MODEL.MASK_ON=True means the data mapper calls annotations_to_instanc
 which expects a `segmentation` field -- so each box is written as a rectangle
 polygon. The polygon shape is never used by the loss; the box is.
 
-Run on the host (PIL is available there):
-
     python projects/BoxTeacher/convert_phenobench_to_coco.py \
         --yolo-root /home/ava/data/phenobench-yolo \
         --out-dir   datasets/phenobench/annotations
