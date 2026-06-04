@@ -23,7 +23,8 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
-from detectron2.data import MetadataCatalog, build_detection_train_loader
+from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
+from detectron2.data.datasets import register_coco_instances
 from detectron2.engine import DefaultTrainer, default_argument_parser, default_setup, hooks, launch
 from detectron2.utils.events import EventStorage
 from detectron2.evaluation import (
@@ -48,6 +49,25 @@ from boxteacher import (
 )
 # from cityscapes_eval import CityscapesInstanceEvaluator
 from detectron2.solver.build import maybe_add_gradient_clipping
+
+
+# --- custom datasets -------------------------------------------------------
+# phenobench (box-supervised): boxes from phenobench-yolo, converted to COCO by
+# projects/BoxTeacher/convert_phenobench_to_coco.py. Paths are relative to the
+# working dir (the repo root). Images are bind-mounted by docker/boxteacher.sh.
+_PHENOBENCH = {
+    "phenobench_train": (
+        "datasets/phenobench/images/train",
+        "datasets/phenobench/annotations/train.json",
+    ),
+    "phenobench_val": (
+        "datasets/phenobench/images/val",
+        "datasets/phenobench/annotations/val.json",
+    ),
+}
+for _name, (_img_root, _json) in _PHENOBENCH.items():
+    if _name not in DatasetCatalog.list():
+        register_coco_instances(_name, {"thing_classes": ["crop", "weed"]}, _json, _img_root)
 
 
 class Trainer(DefaultTrainer):

@@ -1,0 +1,13 @@
+# Keep the Docker build context small and free of host-built artifacts.
+.git
+.venv
+**/build
+**/*.so
+**/*.egg-info
+**/__pycache__
+*.pyc
+# Large data/outputs are bind-mounted at runtime, not baked into the image.
+datasets
+pretrained_models
+output
+outputs

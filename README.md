@@ -1,3 +1,67 @@
+## How to train BoxTeacher on PhenoBench dataset
+
+1. Convert phenobench dataset to coco style (assumes the phenobench dataset is a yolo style dataset with bbox labels + images):
+
+   ```
+   python3 projects/BoxTeacher/convert_phenobench_to_coco.py --yolo-root /home/ava/data/phenobench-yolo --out-dir datasets/phenobench/annotations
+   ```
+
+2. Download the pretrained weights:
+
+   ```
+   mkdir -p pretrained_models && wget -P pretrained_models https://github.com/hustvl/BoxTeacher/releases/download/v1.0/R-50.pkl
+   ```
+
+3. Make the shell script executable:
+
+   ```
+   chmod +x docker/boxteacher.sh
+   ```
+
+4. Build docker:
+
+   ```
+   docker/boxteacher.sh build
+   ```
+
+5. Enter shell:
+
+   ```
+   docker/boxteacher.sh run
+   ```
+
+6. Train on phenobench:
+
+   ```
+   python projects/BoxTeacher/train_net.py --config-file projects/BoxTeacher/configs/coco/boxteacher_phenobench_r50_1x.yaml --num-gpus 8
+   ```
+
+## Inference using PhenoBench
+
+1. Enter shell:
+
+   ```
+   docker/boxteacher.sh run
+   ```
+
+2. Inference:
+
+   ```
+   python projects/BoxTeacher/infer.py \
+           --config-file output/boxteacher_phenobench_r50_1x/config.yaml \
+           --weights   output/boxteacher_phenobench_r50_1x/model_final.pth \
+           --input     datasets/phenobench/images/val/06-05_00217_P0038051.png \
+           --output    output/infer_vis \
+           --confidence-threshold 0.7
+   ```
+
+## View training logs
+
+  ```
+  tensorboard --logdir output/boxteacher_phenobench_r50_1x`
+  ```
+
+
 <div align="center">
 <h2>BoxTeacher</h2>
 <h4>Exploring High-Quality Pseudo Masks for Weakly Supervised Instance Segmentation</h4>
