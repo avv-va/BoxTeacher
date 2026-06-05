@@ -1,15 +1,10 @@
 # BoxVerd on the PhenoBench dataset, R-50 backbone.
 #
-# BoxVerd reuses the BoxInst/CondInst architecture (this config inlines
-# AdelaiDet/configs/BoxInst/Base-BoxInst.yaml so it is self-contained and lives
-# entirely under the live-mounted projects/ tree) but selects the BoxVerd
-# meta-architecture, which swaps BoxInst's projection+pairwise mask losses for
-# PoseSegModel's self-supervised box-only "ridge" losses (obj0 + obj1) and a
-# shuffler consistency augmentation. See projects/BoxVerd/boxverd/.
-#
-# MODEL.BOXINST.ENABLED stays True: BoxVerd reuses CondInst's box->bitmask data
-# path (the color-similarity it also computes is simply unused). Solver schedule
-# and dataset paths match boxteacher_phenobench_r50_1x.yaml for comparison.
+# BoxVerd reuses the CondInst architecture (ResNet+FPN backbone, FCOS proposal
+# generator, controller-generated dynamic per-instance mask head) but selects the
+# BoxVerd meta-architecture, which trains the per-instance masks with PoseSegModel's
+# self-supervised box-only "ridge" losses (obj0 + obj1) and a shuffler consistency
+# augmentation. See projects/BoxVerd/boxverd/.#
 MODEL:
   META_ARCHITECTURE: "BoxVerd"
   MASK_ON: True
@@ -33,16 +28,8 @@ MODEL:
     TOPK_PROPOSALS_PER_IM: 64
     MASK_BRANCH:
       OUT_CHANNELS: 16
-  BOXINST:
-    ENABLED: True
-    BOTTOM_PIXELS_REMOVED: 10
-    PAIRWISE:
-      SIZE: 3
-      DILATION: 2
-      COLOR_THRESH: 0.3
   BOX_VERD:
     SHUFFLE_NUM: 4          # slice-and-roll ops per direction; 0 disables shuffling
-    WARMUP_ITERS: 3000      # ramp the self-supervised seg losses (scaled like BoxInst pairwise)
     RIDGE_THRESH: 0.95
     INFLATE_WEIGHT: 0.1
     SEG_WEIGHT: 1.0

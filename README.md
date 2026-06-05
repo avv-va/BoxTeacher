@@ -72,10 +72,10 @@ BoxInst (the box-supervised CondInst baseline that BoxTeacher builds on) trains 
 
    ```
    python projects/BoxTeacher/infer.py \
-           --config-file AdelaiDet/configs/BoxInst/phenobench_R_50_1x.yaml \
-           --weights   output/boxinst_phenobench_r50_1x/model_0004999.pth \
+           --config-file AdelaiDet/configs/BoxInst/boxinst_phenobench_nw.yaml \
+           --weights   output/boxinst_phenobench_nw/model_0004999.pth \
            --input     datasets/phenobench/images/val/06-05_00223_P0038051.png \
-           --output    output/boxinst_phenobench_r50_1x/infer_vis \
+           --output    output/boxinst_phenobench_nw/infer_vis \
            --confidence-threshold 0.7
    ```
 

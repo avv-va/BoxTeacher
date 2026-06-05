@@ -1,9 +1,9 @@
 """
 BoxVerd meta-architecture.
 
-Inherits the BoxInst/CondInst architecture (ResNet+FPN backbone, FCOS proposal
-generator, controller-generated dynamic per-instance mask head) and swaps in
-PoseSegModel's loss + training style:
+Inherits the CondInst architecture (ResNet+FPN backbone, FCOS proposal generator,
+controller-generated dynamic per-instance mask head) and swaps in PoseSegModel's
+loss + training style:
 
   * the per-instance mask head emits two channels (obj0, obj1) and is supervised
     by self-supervised, box-only "ridge" losses (see dynamic_mask_head.py);
@@ -11,6 +11,10 @@ PoseSegModel's loss + training style:
     local function of the image: the image is spatially scrambled, run through
     backbone+mask_branch, then the resulting mask features are descrambled and
     obj0 is supervised on them. Toggle with MODEL.BOX_VERD.SHUFFLE_NUM (0 = off).
+
+Box-only supervision comes from the box rectangle alone (BoxVerd._add_box_bitmasks);
+unlike BoxInst there is no MODEL.BOXINST block, no projection/pairwise loss, and no
+LAB color-similarity.
 
 Inference is identical to CondInst (single pass, per-instance masks), so the
 inference path is delegated to the parent; only the training forward is overridden.
@@ -62,9 +66,6 @@ class BoxVerd(CondInst):
         if not self.training:
             return super().forward(batched_inputs)
 
-        assert self.boxinst_enabled, \
-            "BoxVerd requires MODEL.BOXINST.ENABLED=True (box->bitmask data path)."
-
         original_images = [x["image"].to(self.device) for x in batched_inputs]
 
         images_norm = [self.normalizer(x) for x in original_images]
@@ -74,25 +75,12 @@ class BoxVerd(CondInst):
 
         gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
 
-        # Build per-instance box bitmasks (and, unused here, color similarity)
-        # exactly as CondInst/BoxInst does -- this is the box-only supervision.
-        original_image_masks = [torch.ones_like(x[0], dtype=torch.float32) for x in original_images]
-        for i in range(len(original_image_masks)):
-            im_h = batched_inputs[i]["height"]
-            pixels_removed = int(
-                self.bottom_pixels_removed *
-                float(original_images[i].size(1)) / float(im_h)
-            )
-            if pixels_removed > 0:
-                original_image_masks[i][-pixels_removed:, :] = 0
-
-        original_images_il = ImageList.from_tensors(original_images, self.backbone.size_divisibility)
-        original_image_masks_il = ImageList.from_tensors(
-            original_image_masks, self.backbone.size_divisibility, pad_value=0.0
-        )
-        self.add_bitmasks_from_boxes(
-            gt_instances, original_images_il.tensor, original_image_masks_il.tensor,
-            original_images_il.tensor.size(-2), original_images_il.tensor.size(-1)
+        # Build the per-instance box bitmasks (the box rectangle) that the obj0/obj1
+        # ridge losses train against. Built at the padded resolution so the
+        # mask_out_stride downsample aligns with mask_feats. BoxVerd does this itself
+        # rather than via the BoxInst path: no LAB color-similarity is needed.
+        self._add_box_bitmasks(
+            gt_instances, images_norm.tensor.size(-2), images_norm.tensor.size(-1)
         )
 
         mask_feats, sem_losses = self.mask_branch(features, gt_instances)
@@ -115,6 +103,37 @@ class BoxVerd(CondInst):
         losses.update(proposal_losses)
         losses.update(mask_losses)
         return losses
+
+    def _add_box_bitmasks(self, instances, im_h, im_w):
+        """Attach per-instance box bitmasks to each image's gt_instances.
+
+        For every GT box this rasterizes the filled box rectangle at the padded
+        image resolution (`gt_bitmasks_full`, used by FCOS center sampling) and on
+        the mask_out_stride grid (`gt_bitmasks`, the foreground the obj0/obj1 ridge
+        losses are computed over). This is the box-rectangle half of CondInst's
+        add_bitmasks_from_boxes; BoxVerd never needs the BoxInst LAB color-similarity,
+        so it (and the image-mask / bottom-pixels-removed machinery feeding it) is
+        dropped.
+        """
+        stride = self.mask_out_stride
+        start = int(stride // 2)
+        for per_im_gt_inst in instances:
+            per_im_boxes = per_im_gt_inst.gt_boxes.tensor
+            per_im_bitmasks = []
+            per_im_bitmasks_full = []
+            for per_box in per_im_boxes:
+                bitmask_full = torch.zeros((im_h, im_w), device=self.device).float()
+                bitmask_full[int(per_box[1]):int(per_box[3] + 1), int(per_box[0]):int(per_box[2] + 1)] = 1.0
+                bitmask = bitmask_full[start::stride, start::stride]
+
+                assert bitmask.size(0) * stride == im_h
+                assert bitmask.size(1) * stride == im_w
+
+                per_im_bitmasks.append(bitmask)
+                per_im_bitmasks_full.append(bitmask_full)
+
+            per_im_gt_inst.gt_bitmasks = torch.stack(per_im_bitmasks, dim=0)
+            per_im_gt_inst.gt_bitmasks_full = torch.stack(per_im_bitmasks_full, dim=0)
 
     def _shuffled_mask_feats(self, images_tensor, mask_feats):
         """Spatially shuffle the (normalized) image, re-run backbone+mask_branch,

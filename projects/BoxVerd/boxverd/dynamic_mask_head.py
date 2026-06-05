@@ -15,7 +15,7 @@ positive targets; they are 1px-dilated and trained with weighted BCE. obj1 loss
 (calc_object1_loss): a second channel is trained against soft pseudo-labels
 derived from obj0's normalized predictions. Both are dense per-instance maps over
 the stride-`mask_out_stride` grid; `gt_bitmasks` (the box rectangle, built by
-CondInst.add_bitmasks_from_boxes) plays the role of PoseSegModel's `cls_mask`.
+BoxVerd._add_box_bitmasks) plays the role of PoseSegModel's `cls_mask`.
 
 Per the design, PoseSegModel's `_extend_to_all_strides` multi-scale concat is
 dropped (per-instance masks are single-scale here), and the shuffler consistency
@@ -42,7 +42,6 @@ class BoxVerdMaskHead(DynamicMaskHead):
         # (pseudo-label-from-obj0). 1 in the parent.
         self.out_channels = 2
 
-        self.warmup_iters = cfg.MODEL.BOX_VERD.WARMUP_ITERS
         self.ridge_thresh = cfg.MODEL.BOX_VERD.RIDGE_THRESH
         self.inflate_weight = cfg.MODEL.BOX_VERD.INFLATE_WEIGHT
         self.seg_weight = cfg.MODEL.BOX_VERD.SEG_WEIGHT
@@ -199,8 +198,6 @@ class BoxVerdMaskHead(DynamicMaskHead):
     def __call__(self, mask_feats, mask_feat_stride, pred_instances,
                  gt_instances=None, mask_feats_deshuf=None):
         if self.training:
-            self._iter += 1
-
             gt_inds = pred_instances.gt_inds
             gt_bitmasks = torch.cat([per_im.gt_bitmasks for per_im in gt_instances])
             # box rectangle per matched instance -> (n_inst, 1, H, W) foreground
@@ -227,13 +224,8 @@ class BoxVerdMaskHead(DynamicMaskHead):
                 obj0_logits = mask_logits[:, 0:1]
             obj1_logits = mask_logits[:, 1:2]
 
-            if self.warmup_iters <= 0:
-                warmup_factor = 1.0
-            else:
-                warmup_factor = min(self._iter.item() / float(self.warmup_iters), 1.0)
-
-            losses["loss_obj0"] = self.calc_object0_loss(obj0_logits, box_bitmask) * warmup_factor
-            losses["loss_obj1"] = self.calc_object1_loss(obj1_logits, obj0_logits, box_bitmask) * warmup_factor
+            losses["loss_obj0"] = self.calc_object0_loss(obj0_logits, box_bitmask)
+            losses["loss_obj1"] = self.calc_object1_loss(obj1_logits, obj0_logits, box_bitmask)
             return losses
         else:
             if len(pred_instances) > 0:
