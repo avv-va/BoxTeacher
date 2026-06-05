@@ -1,0 +1,42 @@
+# # 1. rebuild so the AdelaiDet edits land in the image
+# docker/boxteacher.sh build
+
+# # 2. enter the container (datasets + pretrained_models are bind-mounted)
+# docker/boxteacher.sh run
+
+# # 3. train BoxInst on phenobench
+# python AdelaiDet/tools/train_net.py \
+#     --config-file AdelaiDet/configs/BoxInst/phenobench_R_50_1x.yaml \
+#     --num-gpus 8
+# BoxInst (box-supervised CondInst) on the PhenoBench dataset, R-50 backbone.
+
+
+# Inherits Base-BoxInst.yaml (META_ARCHITECTURE CondInst + MODEL.BOXINST.ENABLED,
+# FCOS proposal generator, pairwise/projection box-supervised mask losses) and
+# overrides it for PhenoBench: 2 classes, the phenobench_train/val datasets
+# (registered in tools/train_net.py), and the same solver schedule as
+# projects/BoxTeacher/configs/coco/boxteacher_phenobench_r50_1x.yaml.
+_BASE_: "Base-BoxInst.yaml"
+MODEL:
+  # Reuse the R-50.pkl already downloaded into pretrained_models/ for BoxTeacher
+  # (see README). Path is relative to the working dir (repo root). Swap for
+  # "detectron2://ImageNetPretrained/MSRA/R-50.pkl" to pull the standard
+  # detectron2 backbone instead (needs internet during training).
+  WEIGHTS: "pretrained_models/R-50.pkl"
+  RESNETS:
+    DEPTH: 50
+  FCOS:
+    NUM_CLASSES: 2          # crop, weed (default is 80 for COCO)
+DATASETS:
+  TRAIN: ("phenobench_train",)
+  TEST: ("phenobench_val",)
+SOLVER:
+  # 1407 train imgs / IMS_PER_BATCH 16 ~= 88 iters/epoch. 20000 iters ~= 227
+  # epochs. Matches the BoxTeacher PhenoBench schedule for a fair comparison.
+  IMS_PER_BATCH: 16
+  BASE_LR: 0.01
+  MAX_ITER: 20000
+  STEPS: (14000, 18000)
+TEST:
+  EVAL_PERIOD: 2000
+OUTPUT_DIR: "output/boxinst_phenobench_r50_1x"

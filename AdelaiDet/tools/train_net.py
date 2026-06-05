@@ -22,7 +22,8 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
-from detectron2.data import MetadataCatalog, build_detection_train_loader
+from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
+from detectron2.data.datasets import register_coco_instances
 from detectron2.engine import DefaultTrainer, default_argument_parser, default_setup, hooks, launch
 from detectron2.utils.events import EventStorage
 from detectron2.evaluation import (
@@ -41,7 +42,33 @@ from adet.data.dataset_mapper import DatasetMapperWithBasis
 from adet.data.fcpose_dataset_mapper import FCPoseDatasetMapper
 from adet.config import get_cfg
 from adet.checkpoint import AdetCheckpointer
-from adet.evaluation import TextEvaluator
+# NOTE: `from adet.evaluation import TextEvaluator` is deliberately NOT done at
+# module level. adet.evaluation eagerly imports text_eval_script, which does
+# `from rapidfuzz import string_metric` -- a symbol removed in rapidfuzz >=3,
+# so the import raises ImportError. TextEvaluator is only needed for text-
+# spotting datasets, so it's imported lazily in build_evaluator() below; this
+# keeps non-text tasks (e.g. BoxInst/CondInst on COCO/PhenoBench) importable.
+
+
+# --- custom datasets -------------------------------------------------------
+# phenobench (box-supervised): boxes from phenobench-yolo, converted to COCO by
+# projects/BoxTeacher/convert_phenobench_to_coco.py. Paths are relative to the
+# working dir (the repo root). Images are bind-mounted by docker/boxteacher.sh.
+# Mirrors the registration in projects/BoxTeacher/train_net.py so BoxInst
+# (configs/BoxInst/*phenobench*) can train on the same data.
+_PHENOBENCH = {
+    "phenobench_train": (
+        "datasets/phenobench/images/train",
+        "datasets/phenobench/annotations/train.json",
+    ),
+    "phenobench_val": (
+        "datasets/phenobench/images/val",
+        "datasets/phenobench/annotations/val.json",
+    ),
+}
+for _name, (_img_root, _json) in _PHENOBENCH.items():
+    if _name not in DatasetCatalog.list():
+        register_coco_instances(_name, {"thing_classes": ["crop", "weed"]}, _json, _img_root)
 
 
 class Trainer(DefaultTrainer):
@@ -150,6 +177,7 @@ class Trainer(DefaultTrainer):
         if evaluator_type == "lvis":
             return LVISEvaluator(dataset_name, cfg, True, output_folder)
         if evaluator_type == "text":
+            from adet.evaluation import TextEvaluator
             return TextEvaluator(dataset_name, cfg, True, output_folder)
         if len(evaluator_list) == 0:
             raise NotImplementedError(

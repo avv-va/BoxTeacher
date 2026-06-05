@@ -36,6 +36,30 @@
    python projects/BoxTeacher/train_net.py --config-file projects/BoxTeacher/configs/coco/boxteacher_phenobench_r50_1x.yaml --num-gpus 8
    ```
 
+## How to train BoxInst on PhenoBench dataset
+
+BoxInst (the box-supervised CondInst baseline that BoxTeacher builds on) trains on the same PhenoBench data via AdelaiDet's training script. Steps 1–2 from the section above (convert the dataset to COCO style, download `R-50.pkl`) are shared prerequisites — do those first if you haven't already.
+
+1. Build docker (bakes in the AdelaiDet training script, which registers the `phenobench_train`/`phenobench_val` datasets):
+
+   ```
+   docker/boxteacher.sh build
+   ```
+
+2. Enter shell:
+
+   ```
+   docker/boxteacher.sh run
+   ```
+
+3. Train BoxInst on phenobench:
+
+   ```
+   python AdelaiDet/tools/train_net.py --config-file AdelaiDet/configs/BoxInst/boxinst_phenobench_nw.yaml --num-gpus 8
+   ```
+
+   Checkpoints and logs are written to `output/boxinst_phenobench_r50_1x/`.
+
 ## Inference using PhenoBench
 
 1. Enter shell:
@@ -48,10 +72,10 @@
 
    ```
    python projects/BoxTeacher/infer.py \
-           --config-file output/boxteacher_phenobench_r50_1x/config.yaml \
-           --weights   output/boxteacher_phenobench_r50_1x/model_final.pth \
-           --input     datasets/phenobench/images/val/06-05_00217_P0038051.png \
-           --output    output/infer_vis \
+           --config-file AdelaiDet/configs/BoxInst/phenobench_R_50_1x.yaml \
+           --weights   output/boxinst_phenobench_r50_1x/model_0004999.pth \
+           --input     datasets/phenobench/images/val/06-05_00223_P0038051.png \
+           --output    output/boxinst_phenobench_r50_1x/infer_vis \
            --confidence-threshold 0.7
    ```
 
